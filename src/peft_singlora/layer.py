@@ -149,9 +149,10 @@ class SingLoRALayer(nn.Module, LoraLayer):
                     : self.base_layer.out_features, : self.base_layer.in_features
                 ]
             else:
-                # Use truncated A for the computation
-                A_star = A[: self.d_in, :]
-                update = A_star @ A.T
+                # the original implementation assumes square matrices,
+                # which results in a crash when in_features < out_features.
+                A_star = A[: self.d_in, :]  # Shape: (in_features, rank)
+                update = A @ A_star.T  # Shape: (out_features, in_features)
         else:
             update = aa_t
 
