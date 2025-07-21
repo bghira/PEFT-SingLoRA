@@ -10,7 +10,7 @@ SingLoRA (Single Low-Rank Adaptation) is an efficient alternative to traditional
 
 - 🚀 **50% fewer parameters** than standard LoRA
 - 🔧 **Fully compatible with PEFT** ecosystem
-- 📊 **Mathematically equivalent** adaptation capability
+- 📊 **Mathematically equivalent** to standard LoRA
 - 🎯 **Easy integration** with existing PEFT workflows
 
 ## Installation
