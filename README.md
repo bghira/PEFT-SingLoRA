@@ -99,10 +99,14 @@ Check out the [examples/](https://github.com/bghira/PEFT-SingLoRA/tree/main/exam
 If you use SingLoRA in your research, please cite:
 
 ```bibtex
-@article{singlora2024,
-  title={SingLoRA: Rethinking Low-Rank Adaptation for Parameter-Efficient Fine-Tuning},
-  author={...},
-  year={2024}
+@misc{bensaïd2025singloralowrankadaptation,
+      title={SingLoRA: Low Rank Adaptation Using a Single Matrix}, 
+      author={David Bensaïd and Noam Rotstein and Roy Velich and Daniel Bensaïd and Ron Kimmel},
+      year={2025},
+      eprint={2507.05566},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2507.05566}, 
 }
 ```
 
