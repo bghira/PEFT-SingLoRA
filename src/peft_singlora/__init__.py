@@ -8,7 +8,7 @@ instead of two, reducing parameters while maintaining performance.
 from .layer import SingLoRALayer, Linear
 from .config import SingLoRAConfig, setup_singlora
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = ["SingLoRALayer", "Linear", "SingLoRAConfig", "setup_singlora"]
 
 # Convenience function to set up SingLoRA globally
