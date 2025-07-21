@@ -1,0 +1,79 @@
+name: Check Release Readiness
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install package in editable mode
+      run: |
+        pip install -e ".[dev,examples]"
+    
+    - name: Run tests
+      run: |
+        pytest tests/ -v
+    
+    - name: Check version consistency
+      run: |
+        python - << 'EOF'
+        import tomlkit
+        import re
+        import sys
+        
+        # Read version from pyproject.toml
+        with open("pyproject.toml", "r") as f:
+            doc = tomlkit.load(f)
+        toml_version = doc["project"]["version"]
+        
+        # Read version from __init__.py
+        with open("src/peft_singlora/__init__.py", "r") as f:
+            content = f.read()
+        
+        match = re.search(r'__version__ = "([^"]*)"', content)
+        init_version = match.group(1) if match else None
+        
+        print(f"pyproject.toml version: {toml_version}")
+        print(f"__init__.py version: {init_version}")
+        
+        if toml_version != init_version:
+            print("❌ Version mismatch!")
+            sys.exit(1)
+        else:
+            print("✓ Versions match!")
+        EOF
+    
+    - name: Build package
+      run: |
+        pip install build
+        python -m build
+        
+    - name: Check package
+      run: |
+        pip install twine
+        twine check dist/*
+        
+    - name: Test installation
+      run: |
+        # Create a fresh virtual environment
+        python -m venv test_env
+        source test_env/bin/activate
+        
+        # Install from the built wheel
+        pip install dist/*.whl
+        
+        # Test import
+        python -c "from peft_singlora import setup_singlora; print('✓ Import successful')"
+        
+        deactivate
