@@ -138,7 +138,7 @@ def test_merge_unmerge():
     setup_singlora()
 
     model = SimpleModel()
-    config = LoraConfig(
+    config = SingLoRAConfig(
         r=4,
         lora_alpha=16,
         target_modules=["linear1"],
