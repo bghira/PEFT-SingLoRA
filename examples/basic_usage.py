@@ -41,7 +41,7 @@ def main():
     #     loss = outputs.loss
     #     loss.backward()
     #     optimizer.step()
-    #     update_singlora_global_step(peft_model, step)  # Update global step for SingLoRA layers so that ramp-up works.
+    #     update_singlora_global_step(peft_model, step)  # Call this after optimizer.step() and before the next training iteration to update the global step for SingLoRA layers and ensure ramp-up works correctly.
 
     # peft_model.save_pretrained("./singlora-adapter")
 

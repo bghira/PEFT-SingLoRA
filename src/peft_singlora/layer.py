@@ -126,7 +126,7 @@ class SingLoRALayer(nn.Module, LoraLayer):
         """Update global step for all adapters."""
         for adapter_name in self.lora_A.keys():
             step_buffer = getattr(self, f"training_step_{adapter_name}")
-            step_buffer.data = torch.tensor(global_step, dtype=torch.float32)
+            step_buffer.fill_(global_step)
 
     def reset_lora_parameters(self, adapter_name: str, init_lora_weights: Union[bool, str]):
         """Reset/initialize the LoRA parameters."""
