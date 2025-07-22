@@ -5,7 +5,7 @@ Basic usage example for PEFT-SingLoRA.
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from peft import LoraConfig, get_peft_model, TaskType
-from peft_singlora import setup_singlora
+from peft_singlora import setup_singlora, update_singlora_global_step
 
 
 def main():
@@ -31,8 +31,17 @@ def main():
         predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
         print(f"Predictions: {predictions}")
 
+    # training loop pseudo-code:
+
     # optimizer = torch.optim.AdamW(peft_model.parameters(), lr=1e-4)
-    # ... training loop ...
+    # dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    # for step in range(100):
+    #     optimizer.zero_grad()
+    #     outputs = peft_model(**inputs)
+    #     loss = outputs.loss
+    #     loss.backward()
+    #     optimizer.step()
+    #     update_singlora_global_step(peft_model, step)  # Update global step for SingLoRA layers so that ramp-up works.
 
     # peft_model.save_pretrained("./singlora-adapter")
 

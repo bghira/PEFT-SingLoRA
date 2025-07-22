@@ -6,6 +6,19 @@ from typing import Optional, Union, List
 from peft.tuners.lora.layer import LoraLayer
 
 
+def update_singlora_global_step(model: nn.Module, global_step: int):
+    """
+    Update the global step for all SingLoRA layers in the model.
+
+    Args:
+        model: The model containing SingLoRA layers.
+        global_step: The current global step to set.
+    """
+    for name, layer in model.named_modules():
+        if isinstance(layer, SingLoRALayer):
+            layer.update_global_step(global_step)
+
+
 class SingLoRALayer(nn.Module, LoraLayer):
     """
     This layer implements the SingLoRA approach using a single matrix 'A' instead of
@@ -97,9 +110,7 @@ class SingLoRALayer(nn.Module, LoraLayer):
         self.lora_A[adapter_name] = nn.Parameter(torch.zeros(self.d_out, r))
 
         # Initialize training step counter
-        self.register_buffer(
-            f"training_step_{adapter_name}", torch.tensor(0, dtype=torch.float32)
-        )
+        self.register_buffer(f"training_step_{adapter_name}", torch.tensor(0, dtype=torch.float32))
 
         # Initialize weights
         if init_lora_weights:
@@ -111,9 +122,13 @@ class SingLoRALayer(nn.Module, LoraLayer):
         else:
             self.scaling[adapter_name] = lora_alpha / r
 
-    def reset_lora_parameters(
-        self, adapter_name: str, init_lora_weights: Union[bool, str]
-    ):
+    def update_global_step(self, global_step: int):
+        """Update global step for all adapters."""
+        for adapter_name in self.lora_A.keys():
+            step_buffer = getattr(self, f"training_step_{adapter_name}")
+            step_buffer.data = torch.tensor(global_step, dtype=torch.float32)
+
+    def reset_lora_parameters(self, adapter_name: str, init_lora_weights: Union[bool, str]):
         """Reset/initialize the LoRA parameters."""
         if adapter_name in self.lora_A.keys():
             if init_lora_weights is True:
@@ -145,9 +160,7 @@ class SingLoRALayer(nn.Module, LoraLayer):
         if isinstance(self.base_layer, nn.Linear):
             if self.base_layer.in_features > self.base_layer.out_features:
                 # Truncate for the update
-                update = aa_t[
-                    : self.base_layer.out_features, : self.base_layer.in_features
-                ]
+                update = aa_t[: self.base_layer.out_features, : self.base_layer.in_features]
             else:
                 # the original implementation assumes square matrices,
                 # which results in a crash when in_features < out_features.
@@ -171,11 +184,6 @@ class SingLoRALayer(nn.Module, LoraLayer):
             if active_adapter not in self.lora_A.keys():
                 continue
 
-            # Increment training step if in training mode
-            if self.training:
-                step_buffer = getattr(self, f"training_step_{active_adapter}")
-                step_buffer.data += 1
-
             # Apply dropout
             dropout = self.lora_dropout[active_adapter]
 
@@ -192,11 +200,11 @@ class SingLoRALayer(nn.Module, LoraLayer):
                 # This is a simplified version - full implementation would need proper handling
                 raise NotImplementedError("Conv2d support needs proper implementation")
 
+        # NOTE: The original implementation used a buffer and tracked steps 1:1 but for gradient accumulation,
+        # you'll have to ensure you call `update_singlora_global_step` appropriately.
         return result
 
-    def merge(
-        self, safe_merge: bool = False, adapter_names: Optional[List[str]] = None
-    ) -> None:
+    def merge(self, safe_merge: bool = False, adapter_names: Optional[List[str]] = None) -> None:
         """Merge adapter weights into the base layer."""
         if adapter_names is None:
             adapter_names = self.active_adapters

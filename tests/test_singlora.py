@@ -8,7 +8,7 @@ import torch.nn as nn
 from peft import LoraConfig, get_peft_model
 
 # Import after peft to avoid issues
-from peft_singlora import setup_singlora, Linear, SingLoRAConfig
+from peft_singlora import setup_singlora, Linear, SingLoRAConfig, update_singlora_global_step
 
 
 class SimpleModel(nn.Module):
@@ -148,11 +148,11 @@ def test_merge_unmerge():
 
     peft_model = get_peft_model(model, config)
 
-    # Manually increment training step to get non-zero ramp-up factor
+    # Use update_singlora_global_step to increment training step
+    update_singlora_global_step(peft_model, 1)
+
     # Access the SingLoRA layer
     singlora_layer = peft_model.base_model.model.linear1
-    step_buffer = getattr(singlora_layer, f"training_step_default")
-    step_buffer.data = torch.tensor(1.0)  # Set to 1 so ramp_up = 1.0
 
     # Get original weight
     original_weight = peft_model.base_model.model.linear1.base_layer.weight.clone()
@@ -190,12 +190,11 @@ def test_ramp_up_function():
     assert torch.allclose(update_weight_0, torch.zeros_like(update_weight_0))
 
     # After 50 steps, should be scaled by 0.5
-    step_buffer = getattr(singlora_layer, f"training_step_default")
-    step_buffer.data = torch.tensor(50.0)
+    update_singlora_global_step(singlora_layer, 50)
     update_weight_50 = singlora_layer._get_update_weight("default")
 
     # After 100 steps, should be fully scaled
-    step_buffer.data = torch.tensor(100.0)
+    update_singlora_global_step(singlora_layer, 100)
     update_weight_100 = singlora_layer._get_update_weight("default")
 
     # Check that magnitude increases
