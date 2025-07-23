@@ -8,11 +8,5 @@ instead of two, reducing parameters while maintaining performance.
 from .layer import SingLoRALayer, Linear, update_singlora_global_step
 from .config import SingLoRAConfig, setup_singlora
 
-__version__ = "0.1.2"
-__all__ = [
-    "SingLoRALayer",
-    "Linear",
-    "SingLoRAConfig",
-    "setup_singlora",
-    "update_singlora_global_step",
-]
+__version__ = "0.2.0"
+__all__ = ["SingLoRALayer", "Linear", "SingLoRAConfig", "setup_singlora", "update_singlora_global_step"]
