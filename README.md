@@ -21,10 +21,12 @@ pip install peft-singlora
 
 ## Quick Start
 
+Here is an extremely simplified training loop example to help understand when to update the global step:
+
 ```python
 from transformers import AutoModelForCausalLM
 from peft import LoraConfig, get_peft_model
-from peft_singlora import setup_singlora
+from peft_singlora import setup_singlora, update_singlora_global_step
 
 # Load your model
 model = AutoModelForCausalLM.from_pretrained("your-model-name")
@@ -43,7 +45,27 @@ config = LoraConfig(
 # Create PEFT model - will automatically use SingLoRA for linear layers
 peft_model = get_peft_model(model, config)
 
-# Train as usual!
+# Training loop with proper step tracking
+gradient_accumulation_steps = 4
+global_step = 0
+
+for epoch in range(num_epochs):
+    for batch_idx, batch in enumerate(dataloader):
+        # Forward pass
+        outputs = peft_model(**batch)
+        loss = outputs.loss / gradient_accumulation_steps
+        
+        # Backward pass
+        loss.backward()
+        
+        # Update weights and global step every N batches
+        if (batch_idx + 1) % gradient_accumulation_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad()
+            
+            # Update SingLoRA step counter after optimizer step
+            update_singlora_global_step(peft_model, global_step)
+            global_step += 1
 ```
 
 ## How It Works

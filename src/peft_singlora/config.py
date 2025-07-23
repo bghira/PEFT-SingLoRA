@@ -21,7 +21,7 @@ class SingLoRAConfig(LoraConfig):
         target_modules: Optional[Union[List[str], str]] = None,
         lora_dropout: float = 0.0,
         ramp_up_steps: int = 1000,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize SingLoRA configuration.
@@ -39,7 +39,7 @@ class SingLoRAConfig(LoraConfig):
             lora_alpha=lora_alpha,
             target_modules=target_modules,
             lora_dropout=lora_dropout,
-            **kwargs
+            **kwargs,
         )
         self.ramp_up_steps = ramp_up_steps
 
@@ -88,6 +88,4 @@ def setup_singlora():
         print("✓ SingLoRA successfully registered with PEFT")
 
     except ImportError:
-        warnings.warn(
-            "PEFT not installed. Please install it with: pip install peft>=0.7.0"
-        )
+        warnings.warn("PEFT not installed. Please install it with: pip install peft>=0.7.0")
