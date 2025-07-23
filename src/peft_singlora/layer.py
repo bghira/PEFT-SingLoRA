@@ -23,9 +23,11 @@ class SingLoRALayer(nn.Module, LoraLayer):
     """
     This layer implements the SingLoRA approach using a single matrix 'A' instead of
     the typical LoRA's two matrices. The weight update is calculated as:
-    W = W_0 + alpha/r * u(t) * A @ A.T
+    W = W_0 + alpha/r * u(t) * A @ A.T (for square matrices)
+    W = W_0 + alpha/r * u(t) * A* @ A.T (for non-square matrices)
 
-    where u(t) is a ramp-up function that gradually increases from 0 to 1.
+    where u(t) is a ramp-up function that gradually increases from 0 to 1,
+    and A* is a truncation of A for non-square cases.
     """
 
     def __init__(
@@ -64,9 +66,6 @@ class SingLoRALayer(nn.Module, LoraLayer):
         self.lora_A = nn.ParameterDict({})
         self.ramp_up_steps = ramp_up_steps
 
-        # Register buffers for training steps per adapter
-        self.lora_training_steps = nn.ParameterDict({})
-
         if r > 0:
             self.update_layer(
                 adapter_name, r, lora_alpha, lora_dropout, init_lora_weights, use_rslora
@@ -93,21 +92,18 @@ class SingLoRALayer(nn.Module, LoraLayer):
 
         # Determine dimensions based on layer type
         if isinstance(self.base_layer, nn.Linear):
-            in_features = self.base_layer.in_features
-            out_features = self.base_layer.out_features
+            self.in_features = self.base_layer.in_features
+            self.out_features = self.base_layer.out_features
         elif isinstance(self.base_layer, nn.Conv2d):
-            in_features = self.base_layer.in_channels
-            out_features = self.base_layer.out_channels
+            self.in_features = self.base_layer.in_channels
+            self.out_features = self.base_layer.out_channels
         else:
             raise TypeError(f"Unsupported layer type: {type(self.base_layer)}")
 
-        # For SingLoRA, we need to handle non-square matrices
-        self.d_out, self.d_in = out_features, in_features
-        if self.d_in > self.d_out:
-            self.d_out, self.d_in = self.d_in, self.d_out
-
-        # Create the single matrix A
-        self.lora_A[adapter_name] = nn.Parameter(torch.zeros(self.d_out, r))
+        # Create the single matrix A with the larger dimension
+        # This follows the paper's approach where A ∈ R^(max(d_in, d_out) × r)
+        self.larger_dim = max(self.in_features, self.out_features)
+        self.lora_A[adapter_name] = nn.Parameter(torch.zeros(self.larger_dim, r))
 
         # Initialize training step counter
         self.register_buffer(f"training_step_{adapter_name}", torch.tensor(0, dtype=torch.float32))
@@ -121,12 +117,6 @@ class SingLoRALayer(nn.Module, LoraLayer):
             self.scaling[adapter_name] = lora_alpha / math.sqrt(r)
         else:
             self.scaling[adapter_name] = lora_alpha / r
-
-    def update_global_step(self, global_step: int):
-        """Update global step for all adapters."""
-        for adapter_name in self.lora_A.keys():
-            step_buffer = getattr(self, f"training_step_{adapter_name}")
-            step_buffer.fill_(global_step)
 
     def reset_lora_parameters(self, adapter_name: str, init_lora_weights: Union[bool, str]):
         """Reset/initialize the LoRA parameters."""
@@ -151,23 +141,27 @@ class SingLoRALayer(nn.Module, LoraLayer):
         ).item()
 
         # Get the A matrix for this adapter
-        A = self.lora_A[adapter_name]
+        A = self.lora_A[adapter_name]  # Shape: (larger_dim, r)
 
-        # Calculate A @ A.T
-        aa_t = A @ A.T
-
-        # Handle non-square matrices
-        if isinstance(self.base_layer, nn.Linear):
-            if self.base_layer.in_features > self.base_layer.out_features:
-                # Truncate for the update
-                update = aa_t[: self.base_layer.out_features, : self.base_layer.in_features]
-            else:
-                # the original implementation assumes square matrices,
-                # which results in a crash when in_features < out_features.
-                A_star = A[: self.d_in, :]  # Shape: (in_features, rank)
-                update = A @ A_star.T  # Shape: (out_features, in_features)
+        # Handle different matrix shapes according to the paper
+        if self.in_features == self.out_features:
+            # Square matrix: use standard A @ A.T
+            update = A @ A.T
         else:
-            update = aa_t
+            # Non-square matrix: use A* @ A.T where A* is truncated A
+            smaller_dim = min(self.in_features, self.out_features)
+            A_star = A[:smaller_dim, :]  # Shape: (smaller_dim, r)
+
+            if self.in_features < self.out_features:
+                # Case from paper: d_in < d_out
+                # A has shape (d_out, r), A* has shape (d_in, r)
+                # A* @ A.T has shape (d_in, d_out) = correct weight shape
+                update = A_star @ A.T
+            else:
+                # Transposed case: d_in > d_out
+                # A has shape (d_in, r), A* has shape (d_out, r)
+                # We need shape (d_out, d_in), so we compute A @ A*.T
+                update = A @ A_star.T
 
         # Apply scaling and ramp-up
         return ramp_up_factor * self.scaling[adapter_name] * update
@@ -200,8 +194,6 @@ class SingLoRALayer(nn.Module, LoraLayer):
                 # This is a simplified version - full implementation would need proper handling
                 raise NotImplementedError("Conv2d support needs proper implementation")
 
-        # NOTE: The original implementation used a buffer and tracked steps 1:1 but for gradient accumulation,
-        # you'll have to ensure you call `update_singlora_global_step` appropriately.
         return result
 
     def merge(self, safe_merge: bool = False, adapter_names: Optional[List[str]] = None) -> None:
@@ -234,6 +226,12 @@ class SingLoRALayer(nn.Module, LoraLayer):
             active_adapter = self.merged_adapters.pop()
             if active_adapter in self.lora_A.keys():
                 self.base_layer.weight.data -= self._get_update_weight(active_adapter)
+
+    def update_global_step(self, global_step: int):
+        """Update global step for all adapters."""
+        for adapter_name in self.lora_A.keys():
+            step_buffer = getattr(self, f"training_step_{adapter_name}")
+            step_buffer.fill_(global_step)
 
     def __repr__(self) -> str:
         rep = super().__repr__()

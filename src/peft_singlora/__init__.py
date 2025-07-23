@@ -9,4 +9,10 @@ from .layer import SingLoRALayer, Linear, update_singlora_global_step
 from .config import SingLoRAConfig, setup_singlora
 
 __version__ = "0.1.2"
-__all__ = ["SingLoRALayer", "Linear", "SingLoRAConfig", "setup_singlora", "update_singlora_global_step"]
+__all__ = [
+    "SingLoRALayer",
+    "Linear",
+    "SingLoRAConfig",
+    "setup_singlora",
+    "update_singlora_global_step",
+]
